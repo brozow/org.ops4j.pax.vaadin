@@ -174,6 +174,14 @@ public class PaxVaadinBundleTracker extends BundleTracker {
 		if (registeredServlet != null)
 			registeredServlet.unregister();
 
+		if (isThemeBundle(bundle)) {
+		    logger.debug("found a vaadin-resource bundle: {}", bundle);
+		    // TODO do VAADIN Themes handling
+		    ServiceReference serviceReference = bundle.getBundleContext().getServiceReference(VaadinResourceService.class.getName());
+		    VaadinResourceService service = (VaadinResourceService) bundle.getBundleContext().getService(serviceReference);
+		    service.removeResources(bundle);
+		}
+
 		super.removedBundle(bundle, event, object);
 	}
 
