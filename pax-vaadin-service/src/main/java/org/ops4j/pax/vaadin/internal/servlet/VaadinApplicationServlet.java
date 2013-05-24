@@ -28,102 +28,88 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.ops4j.pax.swissbox.core.ContextClassLoaderUtils;
-import org.osgi.framework.Bundle;
 
 import com.vaadin.Application;
 import com.vaadin.terminal.gwt.server.AbstractApplicationServlet;
-import com.vaadin.terminal.gwt.server.ApplicationServlet;
 
 public class VaadinApplicationServlet extends HttpServlet {
+    private static final long serialVersionUID = -3076804864104644385L;
+    private ClassLoader classLoader;
+    private Servlet servlet;
 
-	private static final long serialVersionUID = 1L;
-	private ClassLoader classLoader;
-	private Servlet servlet;
+    public VaadinApplicationServlet(final Application application) {
+        classLoader = application.getClass().getClassLoader();
+        servlet = new AppServlet(application);
+    }
 
-	public VaadinApplicationServlet(Application application) {
-		classLoader = application.getClass().getClassLoader();
-		servlet = new AppServlet(application);
-	}
+    @Override
+    protected void doGet(final HttpServletRequest req, final HttpServletResponse resp) throws ServletException, IOException {
+        service(req, resp);
+    }
 
-	@Override
-	protected void doGet(HttpServletRequest req, HttpServletResponse resp)
-			throws ServletException, IOException {
-		service(req, resp);
-	}
+    @Override
+    protected void doPost(final HttpServletRequest req, final HttpServletResponse resp) throws ServletException, IOException {
+        service(req, resp);
+    }
 
-	@Override
-	protected void doPost(HttpServletRequest req, HttpServletResponse resp)
-			throws ServletException, IOException {
-		service(req, resp);
-	}
+    @Override
+    public void service(final HttpServletRequest request, final HttpServletResponse response) throws ServletException, IOException {
 
-	@Override
-	public void service(final HttpServletRequest request,
-			final HttpServletResponse response) throws ServletException, IOException {
+        try {
+            ContextClassLoaderUtils.doWithClassLoader(classLoader, new Callable<Void>() {
+                public Void call() throws Exception {
+                    servlet.service(request, response);
+                    return null;
+                }
+            });
+        } catch (ServletException e) {
+            // re-thrown
+            throw e;
+        } catch (RuntimeException e) {
+            // re-thrown
+            throw e;
+        } catch (Exception ignore) {
+            // ignored as it should never happen
+        }
+    }
 
-		try {
-			ContextClassLoaderUtils.doWithClassLoader(classLoader,
-					new Callable<Void>() {
+    @Override
+    public void init(final ServletConfig config) throws ServletException {
+        try {
+            ContextClassLoaderUtils.doWithClassLoader(classLoader, new Callable<Void>() {
+                public Void call() throws Exception {
+                    servlet.init(config);
+                    return null;
+                }
+            });
+        } catch (ServletException e) {
+            // re-thrown
+            throw e;
+        } catch (RuntimeException e) {
+            // re-thrown
+            throw e;
+        } catch (Exception ignore) {
+            // ignored as it should never happen
+        }
+    }
 
-						public Void call() throws Exception {
-							servlet.service(request, response);
-							return null;
-						}
+    private class AppServlet extends AbstractApplicationServlet {
+        private static final long serialVersionUID = -6503600258471004469L;
+        private final Application application;
 
-					});
-		} catch (ServletException e) {
-			// re-thrown
-			throw e;
-		} catch (RuntimeException e) {
-			// re-thrown
-			throw e;
-		} catch (Exception ignore) {
-			// ignored as it should never happen
-		}
-	}
+        public AppServlet(final Application application) {
+            this.application = application;
+        }
 
-	@Override
-	public void init(final ServletConfig config) throws ServletException {
-		try {
-			ContextClassLoaderUtils.doWithClassLoader(classLoader,
-					new Callable<Void>() {
+        @Override
+        protected Application getNewApplication(final HttpServletRequest request) throws ServletException {
+            return application;
+        }
 
-						public Void call() throws Exception {
-							servlet.init(config);
-							return null;
-						}
+        @Override
+        protected Class<? extends Application> getApplicationClass() throws ClassNotFoundException {
+            return application.getClass();
+        }
 
-					});
-		} catch (ServletException e) {
-			// re-thrown
-			throw e;
-		} catch (RuntimeException e) {
-			// re-thrown
-			throw e;
-		} catch (Exception ignore) {
-			// ignored as it should never happen
-		}
-	}
-
-	private class AppServlet extends AbstractApplicationServlet {
-
-		private final Application application;
-
-		public AppServlet(Application application) {
-			this.application = application;
-		}
-
-		@Override
-		protected Application getNewApplication(HttpServletRequest request)
-				throws ServletException {
-			return application;
-		}
-
-		@Override
-		protected Class<? extends Application> getApplicationClass()
-				throws ClassNotFoundException {
-			return application.getClass();
-		}
-
-	}
+    }
 }

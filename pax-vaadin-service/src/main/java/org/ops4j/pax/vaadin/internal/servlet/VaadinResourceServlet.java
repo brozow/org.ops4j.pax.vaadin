@@ -33,67 +33,57 @@ import org.ops4j.pax.vaadin.VaadinResourceService;
 import org.osgi.framework.Bundle;
 
 public class VaadinResourceServlet extends HttpServlet implements VaadinResourceService {
+    private static final long serialVersionUID = 7934829225042351903L;
+    public static final String _VAADIN = "/VAADIN";
+    private final Bundle vaadin;
+    private final List<Bundle> resourceBundles = new ArrayList<Bundle>();
 
-	/**
-	 *
-	 */
-	private static final long serialVersionUID = 1L;
+    public VaadinResourceServlet(final Bundle vaadin) {
+        this.vaadin = vaadin;
+    }
 
-	public static final String _VAADIN = "/VAADIN";
+    @Override
+    protected void doGet(final HttpServletRequest req, final HttpServletResponse resp) throws ServletException, IOException {
+        final String path = req.getPathInfo();
+        final String resourcePath = _VAADIN + path;
 
-	private final Bundle vaadin;
+        URL resourceUrl = vaadin.getResource(resourcePath);
 
-	private final List<Bundle> resourceBundles = new ArrayList<Bundle>();
+        if (null == resourceUrl) {
+            resourceUrl = loadFromResources(resourcePath);
+        }
 
-	public VaadinResourceServlet(Bundle vaadin) {
-		this.vaadin = vaadin;
-	}
+        if (null == resourceUrl) {
+            resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
 
-	@Override
-	protected void doGet(HttpServletRequest req,
-			HttpServletResponse resp) throws ServletException,
-			IOException {
-		String path = req.getPathInfo();
-		String resourcePath = _VAADIN + path;
+        final InputStream in = resourceUrl.openStream();
+        final OutputStream out = resp.getOutputStream();
 
-		URL resourceUrl = vaadin.getResource(resourcePath);
+        final byte[] buffer = new byte[1024];
+        int read = 0;
+        while (-1 != (read = in.read(buffer))) {
+            out.write(buffer, 0, read);
+        }
+    }
 
-		if (null == resourceUrl) {
-			resourceUrl = loadFromResources(resourcePath);
-		}
+    private URL loadFromResources(final String resourcePath) {
+        for (final Bundle resourceBundle : resourceBundles) {
+            final URL resourceUrl = resourceBundle.getResource(resourcePath);
+            if (null != resourceUrl) return resourceUrl;
+        }
+        return null;
+    }
 
-		if (null == resourceUrl) {
-			resp.sendError(HttpServletResponse.SC_NOT_FOUND);
-			return;
-		}
+    @Override
+    public void addResources(final Bundle bundle) {
+        resourceBundles.add(bundle);
+    }
 
-		InputStream in = resourceUrl.openStream();
-		OutputStream out = resp.getOutputStream();
-
-		byte[] buffer = new byte[1024];
-		int read = 0;
-		while (-1 != (read = in.read(buffer))) {
-			out.write(buffer, 0, read);
-		}
-	}
-
-	private URL loadFromResources(String resourcePath) {
-		for (Bundle resourceBundle : resourceBundles) {
-			URL resourceUrl = resourceBundle.getResource(resourcePath);
-			if (null != resourceUrl)
-				return resourceUrl;
-		}
-		return null;
-	}
-
-	@Override
-	public void addResources(Bundle bundle) {
-		resourceBundles.add(bundle);
-	}
-
-	@Override
-	public void removeResources(Bundle bundle) {
-		resourceBundles.remove(bundle);
-	}
+    @Override
+    public void removeResources(final Bundle bundle) {
+        resourceBundles.remove(bundle);
+    }
 
 }

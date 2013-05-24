@@ -44,206 +44,140 @@ import com.vaadin.Application;
 
 public class PaxVaadinBundleTracker extends BundleTracker {
 
-	public static final String ALIAS = "alias";
+    public static final String ALIAS = "alias";
+    private static final String VAADIN_PATH = "/VAADIN";
+    private final Logger logger = LoggerFactory.getLogger(PaxVaadinBundleTracker.class.getName());
+    private final Map<Bundle, ServiceRegistration> registeredServlets = new HashMap<Bundle, ServiceRegistration>();
 
-	private static final String VAADIN_PATH = "/VAADIN";
+    public PaxVaadinBundleTracker(final BundleContext context) {
+        super(context, Bundle.ACTIVE, null);
+    }
 
-	private final Logger logger = LoggerFactory
-			.getLogger(PaxVaadinBundleTracker.class.getName());
+    @Override
+    @SuppressWarnings("rawtypes")
+    public Object addingBundle(final Bundle bundle, final BundleEvent event) {
 
-	private final Map<Bundle, ServiceRegistration> registeredServlets = new HashMap<Bundle, ServiceRegistration>();
+        if (isApplicationBundle(bundle)) {
+            logger.debug("found a vaadin-app bundle: {}", bundle);
+            final String applicationClass = (String) bundle.getHeaders().get(org.ops4j.pax.vaadin.Constants.VAADIN_APPLICATION);
+            final String alias = (String) bundle.getHeaders().get("Vaadin-Alias");
+            Application application = null;
+            try {
+                final Class appClazz = bundle.loadClass(applicationClass);
 
-	public PaxVaadinBundleTracker(BundleContext context) {
-		super(context, Bundle.ACTIVE, null);
-	}
+                final Constructor[] ctors = appClazz.getDeclaredConstructors();
+                Constructor ctor = null;
+                for (int i = 0; i < ctors.length; i++) {
+                    ctor = ctors[i];
+                    if (ctor.getGenericParameterTypes().length == 0)
+                        break;
+                }
+                ctor.setAccessible(true);
+                application = (Application) ctor.newInstance();
 
-	@Override
-	public Object addingBundle(Bundle bundle, BundleEvent event) {
+            } catch (ClassNotFoundException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            } catch (SecurityException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            } catch (IllegalArgumentException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            } catch (InstantiationException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            } catch (IllegalAccessException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            } catch (InvocationTargetException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
 
-		if (isApplicationBundle(bundle)) {
-			logger.debug("found a vaadin-app bundle: {}", bundle);
-			String applicationClass = (String) bundle.getHeaders().get(
-					org.ops4j.pax.vaadin.Constants.VAADIN_APPLICATION);
-			String alias = (String) bundle.getHeaders().get("Vaadin-Alias");
-			Application application = null;
-			try {
-				Class appClazz = bundle.loadClass(applicationClass);
+            final String widgetset = findWidgetset(bundle);
 
-				Constructor[] ctors = appClazz.getDeclaredConstructors();
-				Constructor ctor = null;
-				for (int i = 0; i < ctors.length; i++) {
-					ctor = ctors[i];
-					if (ctor.getGenericParameterTypes().length == 0)
-						break;
-				}
-				ctor.setAccessible(true);
-				application = (Application) ctor.newInstance();
+            if (application != null) {
+                final VaadinApplicationServlet servlet = new VaadinApplicationServlet(application);
 
-			} catch (ClassNotFoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (SecurityException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IllegalArgumentException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (InstantiationException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IllegalAccessException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (InvocationTargetException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+                final Map<String, Object> props = new Hashtable<String, Object>();
+                props.put(ALIAS, alias);
 
-			final String widgetset = findWidgetset(bundle);
+                if (widgetset != null) {
+                    props.put("widgetset", widgetset);
+                }
 
-			if (application != null) {
-				VaadinApplicationServlet servlet = new VaadinApplicationServlet(application);
+                final ServiceRegistration registeredServlet = bundle.getBundleContext().registerService(HttpServlet.class.getName(), servlet, (Dictionary) props);
+                registeredServlets.put(bundle, registeredServlet);
+            }
 
-				Map<String, Object> props = new Hashtable<String, Object>();
-				props.put(ALIAS, alias);
+        }
 
-				if (widgetset != null) {
-					props.put("widgetset", widgetset);
-				}
+        if (isThemeBundle(bundle)) {
+            logger.debug("found a vaadin-resource bundle: {}", bundle);
+            // TODO do VAADIN Themes handling
+            final ServiceReference serviceReference = bundle.getBundleContext().getServiceReference(VaadinResourceService.class.getName());
+            final VaadinResourceService service = (VaadinResourceService) bundle.getBundleContext().getService(serviceReference);
+            service.addResources(bundle);
+        }
 
-				ServiceRegistration registeredServlet = bundle
-						.getBundleContext().registerService(
-								HttpServlet.class.getName(), servlet,
-								(Dictionary) props);
+        return super.addingBundle(bundle, event);
+    }
 
-				registeredServlets.put(bundle, registeredServlet);
-			}
+    @SuppressWarnings("rawtypes")
+    protected String findWidgetset(final Bundle bundle) {
+        final Enumeration widgetEntries = bundle.findEntries("", "*.gwt.xml", true);
+        if (widgetEntries == null || !widgetEntries.hasMoreElements()) return null;
 
-		}
+        final URL widgetUrl = (URL) widgetEntries.nextElement();
+        String path = widgetUrl.getPath();
+        path = path.substring(1, path.length() - 8);
+        path = path.replace("/", ".");
+        return path;
+    }
 
-		if (isThemeBundle(bundle)) {
-			logger.debug("found a vaadin-resource bundle: {}", bundle);
-			// TODO do VAADIN Themese handling
-			ServiceReference serviceReference = bundle.getBundleContext()
-					.getServiceReference(VaadinResourceService.class.getName());
-			VaadinResourceService service = (VaadinResourceService) bundle
-					.getBundleContext().getService(serviceReference);
-			service.addResources(bundle);
-		}
+    @Override
+    public void removedBundle(final Bundle bundle, final BundleEvent event, final Object object) {
+        final ServiceRegistration registeredServlet = registeredServlets.get(bundle);
+        if (registeredServlet != null) registeredServlet.unregister();
 
-		return super.addingBundle(bundle, event);
-	}
+        if (isThemeBundle(bundle)) {
+            logger.debug("found a vaadin-resource bundle: {}", bundle);
+            // TODO do VAADIN Themes handling
+            final ServiceReference serviceReference = bundle.getBundleContext().getServiceReference(VaadinResourceService.class.getName());
+            final VaadinResourceService service = (VaadinResourceService) bundle.getBundleContext().getService(serviceReference);
+            service.removeResources(bundle);
+        }
 
-	protected String findWidgetset(Bundle bundle) {
-		Enumeration widgetEntries = bundle.findEntries("", "*.gwt.xml", true);
-//		Enumeration widgetEntries = bundle.getEntryPaths(VAADIN_PATH);
-		if (widgetEntries == null || !widgetEntries.hasMoreElements())
-			return null;
+        super.removedBundle(bundle, event, object);
+    }
 
-		/*
-		while (widgetEntries.hasMoreElements()) {
+    private boolean isApplicationBundle(final Bundle bundle) {
+        if (!isVaadinBundle(bundle)) return false;
 
-			String path = (String) widgetEntries.nextElement();
+        final String applicationClass = (String) bundle.getHeaders().get(org.ops4j.pax.vaadin.Constants.VAADIN_APPLICATION);
 
-			if (path.indexOf("widgetsets") != -1) {
-				Enumeration entryPaths = bundle.getEntryPaths(path);
-				while (entryPaths.hasMoreElements()){
-					path = (String) entryPaths.nextElement();
-					if (path.contains(".")) {
-						if (path.endsWith("/")) {
-							path = path.substring(0, path.length() - 1);
-						}
-						path = path.substring(path.lastIndexOf("/")+1);
-						return path;
-					}
-				}
-			}
-		}
-		*/
-		URL widgetUrl = (URL) widgetEntries.nextElement();
-		String path = widgetUrl.getPath();
-		path = path.substring(1,path.length()-8);
-		path = path.replace("/", ".");
-		return path;
-	}
+        if (applicationClass != null && !applicationClass.isEmpty()) return true;
 
-	@Override
-	public void removedBundle(Bundle bundle, BundleEvent event, Object object) {
+        return false;
+    }
 
-		ServiceRegistration registeredServlet = registeredServlets.get(bundle);
-		if (registeredServlet != null)
-			registeredServlet.unregister();
+    @SuppressWarnings("rawtypes")
+    private boolean isThemeBundle(final Bundle bundle) {
+        if ("com.vaadin".equals(bundle.getSymbolicName())) return false;
 
-		if (isThemeBundle(bundle)) {
-		    logger.debug("found a vaadin-resource bundle: {}", bundle);
-		    // TODO do VAADIN Themes handling
-		    ServiceReference serviceReference = bundle.getBundleContext().getServiceReference(VaadinResourceService.class.getName());
-		    VaadinResourceService service = (VaadinResourceService) bundle.getBundleContext().getService(serviceReference);
-		    service.removeResources(bundle);
-		}
+        final Enumeration vaadinPaths = bundle.getEntryPaths(VAADIN_PATH);
 
-		super.removedBundle(bundle, event, object);
-	}
+        if (vaadinPaths == null || !vaadinPaths.hasMoreElements()) return false;
 
-	private boolean isApplicationBundle(Bundle bundle) {
-		if (!isVaadinBundle(bundle))
-			return false;
+        return true;
+    }
 
-		String applicationClass = (String) bundle.getHeaders().get(
-				org.ops4j.pax.vaadin.Constants.VAADIN_APPLICATION);
+    private boolean isVaadinBundle(final Bundle bundle) {
+        final String importedPackages = (String) bundle.getHeaders().get(Constants.IMPORT_PACKAGE);
+        if (importedPackages == null) return false;
+        if (importedPackages.contains("com.vaadin")) return true;
 
-		if (applicationClass != null && !applicationClass.isEmpty())
-			return true;
-
-		return false;
-	}
-
-	private boolean isThemeBundle(Bundle bundle) {
-		if ("com.vaadin".equals(bundle.getSymbolicName()))
-			return false;
-
-		@SuppressWarnings("rawtypes")
-		Enumeration vaadinPaths = bundle.getEntryPaths(VAADIN_PATH);
-		if (vaadinPaths == null || !vaadinPaths.hasMoreElements())
-			return false;
-
-		return true;
-	}
-
-	private boolean isVaadinBundle(Bundle bundle) {
-		String importedPackages = (String) bundle.getHeaders().get(
-				Constants.IMPORT_PACKAGE);
-		if (importedPackages == null) {
-			return false;
-		}
-
-		if (importedPackages.contains("com.vaadin")) {
-			return true;
-		}
-
-		return false;
-	}
-
-	/*
-	 * private class VaadinServletConfig implements ServletConfig {
-	 *
-	 * private HttpContext httpContext; private String widgetSets;
-	 *
-	 * public VaadinServletConfig(String widgetSets, HttpContext httpContext) {
-	 * this.widgetSets = widgetSets; this.httpContext = httpContext; }
-	 *
-	 * @Override public String getServletName() { return null; }
-	 *
-	 * @Override public ServletContext getServletContext() { return httpContext;
-	 * }
-	 *
-	 * @Override public Enumeration getInitParameterNames() { // TODO
-	 * Auto-generated method stub Vector<String> initParamNames = new
-	 * Vector<String>(); initParamNames.add("Widgetset"); return
-	 * initParamNames.elements(); }
-	 *
-	 * @Override public String getInitParameter(String name) { if
-	 * ("Widgetset".equalsIgnoreCase(name)) return widgetSets; return null; } }
-	 */
-
+        return false;
+    }
 }

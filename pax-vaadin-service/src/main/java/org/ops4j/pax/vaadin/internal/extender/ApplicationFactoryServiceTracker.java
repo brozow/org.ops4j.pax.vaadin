@@ -32,20 +32,19 @@ public class ApplicationFactoryServiceTracker extends ServiceTracker {
     private final Logger logger = LoggerFactory
             .getLogger(ApplicationFactoryServiceTracker.class.getName());
     
-    public ApplicationFactoryServiceTracker(BundleContext context) {
+    public ApplicationFactoryServiceTracker(final BundleContext context) {
         super(context, ApplicationFactory.class.getName(), null);
         
     }
     
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
-    public Object addingService(ServiceReference reference) {
-        ApplicationFactory factory = (ApplicationFactory) super.addingService(reference);
+    public Object addingService(final ServiceReference reference) {
+        final ApplicationFactory factory = (ApplicationFactory) super.addingService(reference);
         FactoryServlet servlet = new FactoryServlet(factory);
         Dictionary props = new Properties();
-        
-        
-        for(String key : reference.getPropertyKeys()) {
+
+        for(final String key : reference.getPropertyKeys()) {
             props.put(key, reference.getProperty(key));
         }
         
@@ -58,15 +57,14 @@ public class ApplicationFactoryServiceTracker extends ServiceTracker {
     }
 
     @Override
-    public void modifiedService(ServiceReference reference, Object service) {
+    public void modifiedService(final ServiceReference reference, final Object service) {
         //TODO: When does this get called
         super.modifiedService(reference, service);
     }
 
     @Override
-    public void removedService(ServiceReference reference, Object service) {
-        
-        ApplicationFactory factory = (ApplicationFactory) context.getService(reference);
+    public void removedService(final ServiceReference reference, final Object service) {
+        final ApplicationFactory factory = (ApplicationFactory) context.getService(reference);
         final ServiceRegistration servletRegistration = m_serviceRegistration.remove(factory);
         if (servletRegistration != null) {
             servletRegistration.unregister();
@@ -80,12 +78,12 @@ public class ApplicationFactoryServiceTracker extends ServiceTracker {
 
         private ApplicationFactory m_factory;
 
-        public FactoryServlet(ApplicationFactory factory) {
+        public FactoryServlet(final ApplicationFactory factory) {
             m_factory = factory;
         }
         
         @Override
-        protected Application getNewApplication(HttpServletRequest request) throws ServletException {
+        protected Application getNewApplication(final HttpServletRequest request) throws ServletException {
             return m_factory.createApplication(request);
         }
 

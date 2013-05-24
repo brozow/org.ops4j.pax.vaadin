@@ -34,57 +34,47 @@ import org.osgi.framework.ServiceRegistration;
 
 /**
  * @author achim
- *
  */
 public class Activator implements BundleActivator {
-
-	private BundleContext bundleContext;
-	private PaxVaadinBundleTracker bundleTracker;
-	private ServiceRegistration resourceService;
+    private BundleContext bundleContext;
+    private PaxVaadinBundleTracker bundleTracker;
+    private ServiceRegistration resourceService;
     private ApplicationFactoryServiceTracker serviceTracker;
 
-	public void start(BundleContext context) throws Exception {
-		bundleContext = context;
-		createAndRegisterVaadinResourceServlet();
+    public void start(final BundleContext context) throws Exception {
+        bundleContext = context;
+        createAndRegisterVaadinResourceServlet();
 
-		bundleTracker = new PaxVaadinBundleTracker(bundleContext);
-		serviceTracker = new ApplicationFactoryServiceTracker(bundleContext);
+        bundleTracker = new PaxVaadinBundleTracker(bundleContext);
+        serviceTracker = new ApplicationFactoryServiceTracker(bundleContext);
 
-		bundleTracker.open();
-		serviceTracker.open();
+        bundleTracker.open();
+        serviceTracker.open();
 
-	}
+    }
 
-	public void stop(BundleContext context) throws Exception {
-		if (bundleTracker != null)
-			bundleTracker.close();
-		
-		if (serviceTracker != null)
-		    serviceTracker.close();
+    public void stop(final BundleContext context) throws Exception {
+        if (bundleTracker != null) bundleTracker.close();
+        if (serviceTracker != null) serviceTracker.close();
+        if (resourceService != null) resourceService.unregister();
+    }
 
-		if (resourceService != null)
-			resourceService.unregister();
-	}
+    private void createAndRegisterVaadinResourceServlet() {
+        Bundle vaadin = null;
+        for (final Bundle bundle : bundleContext.getBundles()) {
+            if ("com.vaadin".equals(bundle.getSymbolicName())) {
+                vaadin = bundle;
+                break;
+            }
+        }
 
-	private void createAndRegisterVaadinResourceServlet() {
-		Bundle vaadin = null;
-		for (Bundle bundle : bundleContext.getBundles()) {
-			if ("com.vaadin".equals(bundle.getSymbolicName())) {
-				vaadin = bundle;
-				break;
-			}
-		}
-
-		Dictionary<String, String> props;
-
-        props = new Hashtable<String, String>();
+        final Dictionary<String, String> props = new Hashtable<String, String>();
         props.put("alias", VaadinResourceServlet._VAADIN);
 
-        HttpServlet vaadinResourceServlet = new VaadinResourceServlet(vaadin);
+        final HttpServlet vaadinResourceServlet = new VaadinResourceServlet(vaadin);
 
-		resourceService = bundleContext.registerService( Servlet.class.getName(), vaadinResourceServlet, props );
-
-		bundleContext.registerService(VaadinResourceService.class.getName(), vaadinResourceServlet, null);
-	}
+        resourceService = bundleContext.registerService(Servlet.class.getName(), vaadinResourceServlet, props);
+        bundleContext.registerService(VaadinResourceService.class.getName(), vaadinResourceServlet, null);
+    }
 
 }
